@@ -1,0 +1,2 @@
+[console_scripts]
+server = argus_env.server.app:main

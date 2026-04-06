@@ -1,0 +1,6 @@
+spec_version: 1
+name: argus-env
+type: environment
+runtime: python
+app: server/app.py
+port: 8000
