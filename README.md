@@ -133,7 +133,7 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 Build the Docker image:
 
 ```bash
-docker build -t argus-env:latest -f server/Dockerfile .
+docker build -t argus-env:latest .
 ```
 
 Run the container:
@@ -189,7 +189,7 @@ The table below is the reproducible local baseline produced by `python -u infere
 - `client.py` contains the typed OpenEnv client.
 - `server/argus_env_environment.py` contains the grading and task logic.
 - `server/app.py` creates the FastAPI app.
-- `server/Dockerfile` builds the HF Space container.
+- `Dockerfile` builds the HF Space container.
 - `inference.py` is the baseline runner.
 
 ## Why ARGUS
