@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+temp_test/
+openenv_argus_env.egg-info/
+.pytest_cache/
+.mypy_cache/

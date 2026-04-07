@@ -1,0 +1,32 @@
+[project]
+name = "openenv-argus-env"
+version = "0.1.0"
+description = "ARGUS - ML Evaluation Integrity Environment"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "openenv-core[core]>=0.2.2",
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "openai>=1.0.0",
+    "httpx>=0.24.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.scripts]
+server = "argus_env.server.app:main"
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["argus_env", "argus_env.server"]
+package-dir = { "argus_env" = ".", "argus_env.server" = "server" }

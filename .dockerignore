@@ -1,0 +1,12 @@
+.git
+.gitignore
+.venv
+.pytest_cache
+.mypy_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+temp_test
+openenv_argus_env.egg-info
+.sixth
