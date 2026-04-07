@@ -20,9 +20,8 @@ except ImportError:  # pragma: no cover - direct source-tree execution
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
-ENV_URL = os.getenv("ENV_URL") or os.getenv("SPACE_URL") or os.getenv("OPENENV_URL")
-LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME") or os.getenv("IMAGE_NAME")
+HF_TOKEN = os.getenv("HF_TOKEN")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 BENCHMARK = os.getenv("ARGUS_BENCHMARK", "argus_env")
 
 TASK_RUNS: Sequence[Tuple[str, int]] = (
@@ -352,11 +351,6 @@ def _generate_action_dict(openai_client: Optional[OpenAI], observation: ArgusObs
 
 
 async def _open_env_client() -> ArgusEnv:
-    if ENV_URL:
-        client = ArgusEnv(base_url=ENV_URL)
-        await client.connect()
-        return client
-
     if LOCAL_IMAGE_NAME:
         return await ArgusEnv.from_docker_image(LOCAL_IMAGE_NAME)
 
