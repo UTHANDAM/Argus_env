@@ -5,4 +5,4 @@ runtime: python
 app: server/app.py
 port: 8000
 version: "1.0.0"
-description: "ARGUS — ML Research Integrity Environment. Trains agents to detect missing baselines, cherry-picked results, and benchmark contamination in ML papers."
+description: "ARGUS - ML Research Integrity Environment. Trains agents to detect missing baselines, cherry-picked results, and benchmark contamination in ML papers."

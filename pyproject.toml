@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "openenv-argus_env"
 version = "1.0.0"
-description = "ARGUS — ML Research Integrity Environment for OpenEnv. Trains agents to detect missing baselines, cherry-picked results, and benchmark contamination in ML papers."
+description = "ARGUS - ML Research Integrity Environment for OpenEnv. Trains agents to detect missing baselines, cherry-picked results, and benchmark contamination in ML papers."
 requires-python = ">=3.10"
 dependencies = [
     # Core OpenEnv runtime (provides FastAPI server + HTTP client types)

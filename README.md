@@ -1,4 +1,4 @@
-# ARGUS 👁️ — ML Research Integrity Environment
+# ARGUS - ML Research Integrity Environment
 
 > *Named after Argus Panoptes, the hundred-eyed giant of Greek mythology who sees everything.*
 
@@ -8,15 +8,15 @@
 
 The ML reproducibility crisis is a documented, expensive, and active problem. arXiv receives 200+ ML papers per day. Human reviewers routinely miss:
 
-- **Missing baselines** — Papers omit strong competing methods to make proposed approaches appear superior
-- **Cherry-picked results** — Authors select the best seed from many runs, reporting artificially low variance
-- **Benchmark contamination** — Training data overlaps with test benchmarks, producing inflated scores
+- **Missing baselines** - Papers omit strong competing methods to make proposed approaches appear superior
+- **Cherry-picked results** - Authors select the best seed from many runs, reporting artificially low variance
+- **Benchmark contamination** - Training data overlaps with test benchmarks, producing inflated scores
 
-No automated integrity checker good enough exists today. ARGUS provides a structured OpenEnv environment to train and evaluate agents that can detect these violations — filling a real gap in the RL/agent community.
+No automated integrity checker good enough exists today. ARGUS provides a structured OpenEnv environment to train and evaluate agents that can detect these violations - filling a real gap in the RL/agent community.
 
 ## Tasks
 
-### Task 1 — Missing Baseline Detection (Easy)
+### Task 1 - Missing Baseline Detection (Easy)
 
 The agent receives a **results table** from a synthetic ML paper comparing 5 methods across 3 datasets. One well-known baseline from the literature is deliberately absent, making the proposed method appear state-of-the-art. The agent must identify which baseline is missing.
 
@@ -25,7 +25,7 @@ The agent receives a **results table** from a synthetic ML paper comparing 5 met
 - **Grading**: Exact string match (case-insensitive). Score: **0.0** or **1.0**
 - **Domains covered**: Text classification, question answering, summarization, machine translation, code generation, image classification
 
-### Task 2 — Cherry-Picked Seed Detection (Medium)
+### Task 2 - Cherry-Picked Seed Detection (Medium)
 
 The agent receives an **ablation study** where one variant shows suspiciously high scores with unusually low variance across 5 seeds (cherry-picked from 20+ runs). The agent must identify which variant was cherry-picked and estimate the true standard deviation range.
 
@@ -34,7 +34,7 @@ The agent receives an **ablation study** where one variant shows suspiciously hi
 - **Grading**: **0.6** for correct variant identification + **0.4** for std range overlapping with true range
 - **Partial reward**: Yes — agent gets credit for variant even if std estimate is wrong
 
-### Task 3 — Benchmark Contamination Assessment (Hard)
+### Task 3 - Benchmark Contamination Assessment (Hard)
 
 The agent receives a **full evaluation setup**: training data sources, benchmark name, model release date, and dataset update timeline. The setup contains injected contamination signals. The agent must output a contamination risk score (0.0–1.0) and list evidence signals.
 
@@ -168,7 +168,7 @@ python inference.py
 
 ## Environment URL
 
-🔗 **https://huggingface.co/spaces/uthandam/argus-env**
+**https://huggingface.co/spaces/uthandam/argus-env**
 
 ## Architecture
 
