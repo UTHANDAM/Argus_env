@@ -7,9 +7,9 @@ sdk: docker
 pinned: false
 app_port: 8000
 tags:
-	- openenv
-	- machine-learning
-	- evaluation
+  - openenv
+  - machine-learning
+  - evaluation
 ---
 
 # ARGUS
