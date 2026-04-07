@@ -83,6 +83,25 @@ def home() -> HTMLResponse:
                             line-height: 1.05;
                         }
                         p { color: var(--muted); line-height: 1.65; font-size: 1rem; }
+                        .cta {
+                            display: inline-flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 10px;
+                            margin-top: 12px;
+                            padding: 14px 20px;
+                            border-radius: 999px;
+                            background: linear-gradient(135deg, #f6c177, #8bd5ca);
+                            color: #0f1117;
+                            font-weight: 700;
+                            letter-spacing: 0.08em;
+                            text-transform: uppercase;
+                            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+                        }
+                        .cta:hover {
+                            text-decoration: none;
+                            transform: translateY(-1px);
+                        }
                         .grid {
                             display: grid;
                             gap: 12px;
@@ -110,8 +129,9 @@ def home() -> HTMLResponse:
                         </p>
                         <p>
                             Use <strong>POST /reset</strong> to start an episode and <strong>POST /step</strong> to submit an action.
-                            The full API is exposed in <a href="/docs">/docs</a>.
+                            The full API is in the main page below.
                         </p>
+                        <a class="cta" href="/docs">MAIN PAGE LINK</a>
                         <div class="grid">
                             <div class="card"><strong>Task types</strong>easy, medium, hard</div>
                             <div class="card"><strong>Deployment</strong>Hugging Face Docker Space</div>
