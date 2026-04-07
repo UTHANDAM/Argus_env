@@ -16,6 +16,8 @@ tags:
 
 ARGUS is an OpenEnv environment for training and evaluating agents on ML research integrity checks. The task is intentionally non-toy: the agent reads paper-like artifacts and must detect the kinds of issues that regularly appear in ML writing and review workflows, including missing baselines, cherry-picked ablation results, and benchmark contamination.
 
+ARGUS now runs as a staged investigation instead of a one-shot classifier. Each episode unfolds across multiple clue reveals, so the agent must use the full `step()` / `reset()` / `state()` loop to refine the answer as new evidence appears.
+
 This is a good fit for OpenEnv because it is:
 
 - Realistic. Researchers, reviewers, and lab engineers already do this work.
@@ -25,17 +27,17 @@ This is a good fit for OpenEnv because it is:
 
 ## Environment Interface
 
-ARGUS follows the standard OpenEnv pattern:
+ARGUS follows the standard OpenEnv pattern, but each episode is multi-step:
 
-- `reset(seed=..., task=...)` starts a new episode and returns an initial observation.
-- `step(action)` grades the submitted answer and returns the next observation with `reward` and `done`.
-- `state()` returns the current episode state.
+- `reset(seed=..., task=...)` starts a new episode and returns the first clue.
+- `step(action)` grades the current stage, returns the next clue, and updates `reward` and `done`.
+- `state()` returns the current episode and stage state.
 
 The environment supports explicit task selection through `reset(task=...)`.
 
-- `task="easy"` selects missing baseline detection.
-- `task="medium"` selects cherry-picked seed detection.
-- `task="hard"` selects benchmark contamination assessment.
+- `task="easy"` selects missing baseline detection over 2 stages.
+- `task="medium"` selects cherry-picked seed detection over 3 stages.
+- `task="hard"` selects benchmark contamination assessment over 3 stages.
 
 If `task` is omitted, the environment cycles through the three tasks in order.
 
@@ -60,6 +62,14 @@ Only the fields relevant to the active task are used by the grader.
 - `context`
 - `task_difficulty`
 - `case_id`
+- `stage_index`
+- `stage_count`
+- `stage_name`
+- `stage_kind`
+- `stage_weight`
+- `next_focus`
+- `episode_reward`
+- `feedback`
 - `done`
 - `reward`
 - `metadata`
@@ -78,38 +88,44 @@ The observation context is synthetic, but it is written to look like a real ML p
 - `episode_index`
 - `task_cursor`
 - `last_reward`
+- `episode_reward`
+- `stage_index`
+- `stage_count`
+- `stage_name`
+- `stage_kind`
+- `last_feedback`
 
 ## Tasks
 
 ### Easy: Missing Baseline Detection
 
-The agent receives a comparison table from a paper and must identify the omitted baseline. This mirrors a common review problem: a paper can look stronger simply because one well-known baseline was left out.
+The agent receives a comparison table from a paper and must identify the omitted baseline. The first stage exposes only the family-level clue; the second stage reveals the exact citation. This mirrors a common review problem: a paper can look stronger simply because one well-known baseline was left out.
 
 Scoring:
 
-- `1.0` for the exact missing baseline.
-- Partial credit for family-level or near-match answers.
+- `0.35` for the family-level clue stage.
+- `0.65` for the exact missing baseline in the final stage.
 - `0.0` for clearly wrong answers.
 
 ### Medium: Cherry-Picked Seed Detection
 
-The agent receives an ablation table with multiple variants and their run-to-run variance. One variant was cherry-picked from a much larger set of runs. The agent must identify the suspicious variant and give a plausible true standard-deviation range.
+The agent receives an ablation table with multiple variants and their run-to-run variance. One variant was cherry-picked from a much larger set of runs. The episode unfolds across three stages: first identify the suspicious variant, then estimate the plausible true standard-deviation range, then cite the strongest evidence signals.
 
 Scoring:
 
-- `0.6` for identifying the correct variant.
-- `0.4` for providing a range that overlaps the true variance band.
-- Partial credit is preserved if only one part is correct.
+- `0.30` for identifying the correct variant.
+- `0.35` for providing a range that overlaps the true variance band.
+- `0.35` for matching the evidence signals.
 
 ### Hard: Benchmark Contamination Assessment
 
-The agent receives a training-data and benchmark description with release dates, data-source hints, and possible contamination cues. The agent must estimate contamination risk and cite the evidence signals that support the estimate.
+The agent receives a training-data and benchmark description with release dates, data-source hints, and possible contamination cues. The episode is staged so the agent must revise its answer as more evidence arrives. The final stage asks for a calibrated contamination risk and the evidence signals that support the estimate.
 
 Scoring:
 
-- Up to `0.5` for a risk estimate close to the ground truth.
-- Up to `0.5` for matching evidence signals.
-- A false positive on a clean case is penalized.
+- Up to `0.25` for the initial risk probe.
+- Up to `0.35` for refining the risk with evidence.
+- Up to `0.40` for the final calibrated answer, with a penalty for confident false positives on clean cases.
 
 ## Setup
 
@@ -150,7 +166,7 @@ openenv validate
 
 ## Baseline Inference
 
-The root-level `inference.py` script runs all three tasks in order and prints the required OpenEnv log format:
+The root-level `inference.py` script runs all three tasks in order, steps through the staged clues, and prints the required OpenEnv log format:
 
 - `[START] task=<task_name> env=<benchmark> model=<model_name>`
 - `[STEP] step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>`
@@ -178,10 +194,10 @@ The table below is the reproducible local baseline produced by `python -u infere
 
 | Task | Score |
 | --- | --- |
-| Easy | 1.00 |
-| Medium | 0.85 |
-| Hard | 1.00 |
-| Mean | 0.95 |
+| Easy | 1.000 |
+| Medium | 0.895 |
+| Hard | 0.714 |
+| Mean | 0.870 |
 
 ## Project Layout
 

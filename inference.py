@@ -33,15 +33,46 @@ TASK_RUNS: Sequence[Tuple[str, int]] = (
 
 TEMPERATURE = 0.0
 MAX_TOKENS = 256
+MAX_STEPS = 6
+SUCCESS_SCORE_THRESHOLD = 0.7
 
 SYSTEM_PROMPT = textwrap.dedent(
     """
     You are a meticulous ML research integrity analyst.
+    You are solving one stage of a multi-step investigation at a time.
     Return exactly one JSON object and nothing else.
     Do not provide explanations, markdown, or code fences.
-    The JSON keys must match the requested task schema exactly.
+    Only include the fields relevant to the current stage schema.
     """
 ).strip()
+
+
+def _stage_info(observation: ArgusObservation) -> Tuple[str, int, int]:
+    metadata = observation.metadata or {}
+    stage_kind = (observation.stage_kind or metadata.get("stage_kind") or "").lower()
+    stage_index = int(observation.stage_index or metadata.get("stage_index", 1) or 1)
+    stage_count = int(observation.stage_count or metadata.get("stage_count", 1) or 1)
+    return stage_kind, stage_index, stage_count
+
+
+def _schema_hint(task_name: str, stage_kind: str) -> str:
+    task_name = (task_name or "").lower()
+    stage_kind = (stage_kind or "").lower()
+
+    if task_name == "easy":
+        return '{"missing_baseline":"string"}'
+
+    if task_name == "medium":
+        if stage_kind == "variant_probe":
+            return '{"cherry_picked_variant":"string"}'
+        if stage_kind == "range_probe":
+            return '{"estimated_std_range":[low,high]}'
+        return '{"evidence":["signal"]}'
+
+    if stage_kind == "risk_probe":
+        return '{"contamination_risk":0.0}'
+
+    return '{"contamination_risk":0.0,"evidence":["signal"]}'
 
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -99,97 +130,151 @@ def _parse_json_object(text: str) -> Dict[str, Any]:
     return {}
 
 
-def _easy_guess(context: str) -> str:
+def _easy_guess(context: str, stage_kind: str) -> Dict[str, Any]:
+    lower_context = context.lower()
+    if stage_kind == "family_hint":
+        patterns = (
+            r"belongs to the\s+([A-Za-z0-9][A-Za-z0-9\-\/+.]+)\s+family",
+            r"references the\s+([A-Za-z0-9][A-Za-z0-9\-\/+.]+)\s+family",
+            r"the\s+([A-Za-z0-9][A-Za-z0-9\-\/+.]+)\s+family",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, context, flags=re.IGNORECASE)
+            if match:
+                return {"missing_baseline": match.group(1).strip(".,;:")}
+
     patterns = (
-        r"discusses\s+([A-Za-z0-9][A-Za-z0-9\-\/+.]+)\s+as\s+a\s+standard\s+baseline",
-        r"cites\s+([A-Za-z0-9][A-Za-z0-9\-\/+.]+)\s+as\s+the\s+stronger\s+published\s+baseline",
-        r"cites\s+([A-Za-z0-9][A-Za-z0-9\-\/+.]+)",
+        r"omitted baseline.*?is\s+([A-Za-z0-9][A-Za-z0-9\-\/+.]+)",
+        r"exact\s+model\s+should\s+have\s+been\s+compared\s+against\s+([A-Za-z0-9][A-Za-z0-9\-\/+.]+)",
+        r"baseline\s+is\s+([A-Za-z0-9][A-Za-z0-9\-\/+.]+)",
     )
     for pattern in patterns:
         match = re.search(pattern, context, flags=re.IGNORECASE)
         if match:
-            return match.group(1).strip(".,;:")
+            return {"missing_baseline": match.group(1).strip(".,;:")}
+
+    if "beit" in lower_context:
+        return {"missing_baseline": "BEiT-B/16" if stage_kind == "exact_missing_baseline" else "BEiT"}
+    if "xlm-r" in lower_context:
+        return {"missing_baseline": "XLM-R-large" if stage_kind == "exact_missing_baseline" else "XLM-R"}
 
     tokens = re.findall(r"[A-Z][A-Za-z0-9\-\/+.]+", context)
-    return tokens[0] if tokens else "UnknownBaseline"
+    return {"missing_baseline": tokens[0] if tokens else "UnknownBaseline"}
 
 
-def _medium_guess(context: str) -> Dict[str, Any]:
-    entries: List[Tuple[str, float]] = []
-    for raw_line in context.splitlines():
-        line = raw_line.strip()
-        match = re.search(
-            r"^(?P<variant>[^:]+):.*?(?:±|StdDev=|Std=)\s*(?P<std>[0-9.]+)",
-            line,
-            flags=re.IGNORECASE,
-        )
-        if match:
-            entries.append((match.group("variant").strip(), float(match.group("std"))))
+def _medium_guess(context: str, stage_kind: str) -> Dict[str, Any]:
+    if stage_kind == "variant_probe":
+        entries: List[Tuple[str, float]] = []
+        for raw_line in context.splitlines():
+            line = raw_line.strip()
+            match = re.search(
+                r"^(?P<variant>[^:]+):.*?(?:±|StdDev=|Std=)\s*(?P<std>[0-9.]+)",
+                line,
+                flags=re.IGNORECASE,
+            )
+            if match:
+                entries.append((match.group("variant").strip(), float(match.group("std"))))
 
-    if not entries:
-        return {
-            "cherry_picked_variant": "Unknown",
-            "estimated_std_range": [0.8, 1.2],
-        }
+        if entries:
+            suspicious_variant, _ = min(entries, key=lambda item: item[1])
+            return {"cherry_picked_variant": suspicious_variant}
+        return {"cherry_picked_variant": "Unknown"}
 
-    suspicious_variant, suspicious_std = min(entries, key=lambda item: item[1])
-    other_stds = [std for variant, std in entries if variant != suspicious_variant]
+    if stage_kind == "range_probe":
+        approx_match = re.search(r"std\s*[≈~]\s*([0-9.]+)", context, flags=re.IGNORECASE)
+        if approx_match:
+            midpoint = float(approx_match.group(1))
+            low = round(max(0.05, midpoint * 0.85), 2)
+            high = round(max(low + 0.1, midpoint * 1.15), 2)
+            return {"estimated_std_range": [low, high]}
 
-    if other_stds:
-        median_std = statistics.median(other_stds)
-        low = round(max(0.05, median_std * 0.8), 2)
-        high = round(median_std * 1.2, 2)
-    else:
-        low = round(max(0.05, suspicious_std * 8.0), 2)
-        high = round(max(low + 0.1, suspicious_std * 12.0), 2)
+        entries: List[Tuple[str, float]] = []
+        for raw_line in context.splitlines():
+            line = raw_line.strip()
+            match = re.search(
+                r"^(?P<variant>[^:]+):.*?(?:±|StdDev=|Std=)\s*(?P<std>[0-9.]+)",
+                line,
+                flags=re.IGNORECASE,
+            )
+            if match:
+                entries.append((match.group("variant").strip(), float(match.group("std"))))
 
-    return {
-        "cherry_picked_variant": suspicious_variant,
-        "estimated_std_range": [low, high],
-    }
+        if entries:
+            suspicious_variant, suspicious_std = min(entries, key=lambda item: item[1])
+            other_stds = [std for variant, std in entries if variant != suspicious_variant]
+            if other_stds:
+                median_std = statistics.median(other_stds)
+                low = round(max(0.05, median_std * 0.8), 2)
+                high = round(median_std * 1.2, 2)
+            else:
+                low = round(max(0.05, suspicious_std * 8.0), 2)
+                high = round(max(low + 0.1, suspicious_std * 12.0), 2)
+            return {"estimated_std_range": [low, high]}
 
+        return {"estimated_std_range": [0.8, 1.2]}
 
-def _hard_guess(context: str) -> Dict[str, Any]:
+    evidence: List[str] = []
     lower_context = context.lower()
-    contaminated_signals = [
-        "solution threads",
-        "not explicitly excluded",
-        "public educational material",
-        "benchmark questions appear",
-        "benchmark in the corpus",
-        "model released after the benchmark",
-        "training cutoff",
-        "benchmark released before training ended",
-    ]
+    if any(phrase in lower_context for phrase in ("20 times", "20 trials", "twenty-run", "twenty run")):
+        evidence.append("twenty_run_audit")
+    if any(phrase in lower_context for phrase in ("five best", "top five", "kept only the five", "top-five")):
+        evidence.append("five_best_checkpoints")
+    if any(phrase in lower_context for phrase in ("selection bias", "variance compression", "artificially small variance", "cherry-picking")):
+        evidence.append("selection_bias")
+    return {"evidence": evidence or ["selection_bias"]}
 
-    clean_signals = [
+
+def _hard_guess(context: str, stage_kind: str) -> Dict[str, Any]:
+    lower_context = context.lower()
+    risk = 0.5
+    evidence: List[str] = []
+
+    cutoff_match = re.search(r"training cutoff:\s*(\d{4}-\d{2}-\d{2})", lower_context)
+    benchmark_match = re.search(r"released(?: on)?\s*(\d{4}-\d{2}-\d{2})", lower_context)
+    if cutoff_match and benchmark_match:
+        from datetime import date
+
+        cutoff = date.fromisoformat(cutoff_match.group(1))
+        benchmark_release = date.fromisoformat(benchmark_match.group(1))
+        if cutoff >= benchmark_release:
+            risk = 0.92
+            evidence.append("temporal_overlap")
+        else:
+            risk = 0.08
+
+    contaminated_signals = (
+        "mirrored archive",
+        "solution-thread",
+        "answer-key mirror",
+        "public educational material",
+        "public instructional dump",
+        "benchmark question mirror",
+    )
+    if any(signal in lower_context for signal in contaminated_signals):
+        risk = max(risk, 0.9)
+        evidence.append("benchmark_in_corpus")
+
+    clean_signals = (
         "deduplicated",
         "held-out",
         "no benchmark-specific scrape",
-        "exact and fuzzy matching",
-        "removed with exact and fuzzy matching",
-    ]
+        "exact/fuzzy match",
+        "fuzzy match",
+        "not explicitly filtered",
+        "compliance log records no benchmark-question hits",
+    )
+    if any(signal in lower_context for signal in clean_signals):
+        if risk < 0.5:
+            risk = 0.08
+        evidence.extend(["deduplication", "held_out_filtering", "no_benchmark_scrape"])
 
-    evidence: List[str] = []
-    if any(signal in lower_context for signal in contaminated_signals):
-        risk = 0.9
-        if "training cutoff" in lower_context or "benchmark released" in lower_context:
-            evidence.append("temporal_overlap")
-        if "solution threads" in lower_context or "benchmark questions appear" in lower_context or "public educational material" in lower_context:
-            evidence.append("benchmark_in_corpus")
-        if "not explicitly excluded" in lower_context or "public educational material" in lower_context:
-            evidence.append("no_exclusion_filter")
-    elif any(signal in lower_context for signal in clean_signals):
-        risk = 0.1
-        if "deduplicated" in lower_context or "exact and fuzzy matching" in lower_context:
-            evidence.append("deduplication")
-        if "held-out" in lower_context or "removed with exact and fuzzy matching" in lower_context:
-            evidence.append("held_out_filtering")
-        if "no benchmark-specific scrape" in lower_context:
-            evidence.append("no_benchmark_scrape")
-    else:
-        risk = 0.5
-        evidence = ["temporal_overlap"] if "benchmark" in lower_context else []
+    if "not separated at crawl time" in lower_context or "not explicitly removed" in lower_context:
+        evidence.append("no_exclusion_filter")
+        risk = max(risk, 0.9)
+
+    evidence = list(dict.fromkeys(evidence))
+    if stage_kind == "risk_probe":
+        return {"contamination_risk": round(risk, 2)}
 
     if not evidence:
         evidence = ["temporal_overlap"] if risk > 0.5 else ["deduplication"]
@@ -202,37 +287,46 @@ def _hard_guess(context: str) -> Dict[str, Any]:
 
 def _heuristic_action(observation: ArgusObservation) -> Dict[str, Any]:
     task_name = (observation.task_name or observation.task_difficulty or "").lower()
+    stage_kind, _, _ = _stage_info(observation)
     if task_name == "easy":
-        return {"missing_baseline": _easy_guess(observation.context)}
+        return _easy_guess(observation.context, stage_kind)
     if task_name == "medium":
-        return _medium_guess(observation.context)
-    return _hard_guess(observation.context)
+        return _medium_guess(observation.context, stage_kind)
+    return _hard_guess(observation.context, stage_kind)
 
 
-def _build_user_prompt(observation: ArgusObservation) -> str:
-    schema_hint = {
-        "easy": '{"missing_baseline":"string"}',
-        "medium": '{"cherry_picked_variant":"string","estimated_std_range":[low,high]}',
-        "hard": '{"contamination_risk":0.0,"evidence":["signal"]}',
-    }.get((observation.task_name or observation.task_difficulty or "").lower(), "{}")
+def _build_user_prompt(observation: ArgusObservation, history: List[str]) -> str:
+    stage_kind, stage_index, stage_count = _stage_info(observation)
+    schema_hint = _schema_hint(observation.task_name or observation.task_difficulty or "", stage_kind)
+    history_block = "\n".join(history[-4:]) if history else "None"
 
     return textwrap.dedent(
         f"""
         Task: {observation.task_name}
         Difficulty: {observation.task_difficulty}
+        Stage: {stage_index}/{stage_count}
+        Stage kind: {stage_kind}
+        Stage name: {observation.stage_name}
+
         Instruction:
         {observation.task_instruction}
+
+        Feedback from the previous stage:
+        {observation.feedback or 'None'}
 
         Context:
         {observation.context}
 
-        Return exactly one JSON object matching this schema:
+        Recent trajectory:
+        {history_block}
+
+        Return exactly one JSON object matching this stage schema:
         {schema_hint}
         """
     ).strip()
 
 
-def _generate_action_dict(openai_client: Optional[OpenAI], observation: ArgusObservation) -> Dict[str, Any]:
+def _generate_action_dict(openai_client: Optional[OpenAI], observation: ArgusObservation, history: List[str]) -> Dict[str, Any]:
     if openai_client is None:
         return _heuristic_action(observation)
 
@@ -241,7 +335,7 @@ def _generate_action_dict(openai_client: Optional[OpenAI], observation: ArgusObs
             model=MODEL_NAME,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": _build_user_prompt(observation)},
+                {"role": "user", "content": _build_user_prompt(observation, history)},
             ],
             temperature=TEMPERATURE,
             max_tokens=MAX_TOKENS,
@@ -266,7 +360,7 @@ async def _open_env_client() -> ArgusEnv:
     if LOCAL_IMAGE_NAME:
         return await ArgusEnv.from_docker_image(LOCAL_IMAGE_NAME)
 
-    client = ArgusEnv(base_url="http://127.0.0.1:8000")
+    client = ArgusEnv(base_url="http://127.0.0.1:7860")
     await client.connect()
     return client
 
@@ -277,38 +371,51 @@ async def _run_episode(task_name: str, seed: int, openai_client: Optional[OpenAI
     steps_taken = 0
     score = 0.0
     success = False
+    history: List[str] = []
 
     log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
     try:
-        reset_result = await env.reset(task=task_name, seed=seed)
-        observation = reset_result.observation
-        action_dict = _generate_action_dict(openai_client, observation)
+        result = await env.reset(task=task_name, seed=seed)
+        observation = result.observation
+        done = bool(result.done)
 
-        try:
-            action = ArgusAction(**action_dict)
-            action_log = _compact_action_log(action.model_dump(exclude_none=True))
-            error = None
-        except Exception as exc:
-            action = ArgusAction(**_heuristic_action(observation))
-            action_log = _compact_action_log(action.model_dump(exclude_none=True))
-            error = str(exc)
+        while steps_taken < MAX_STEPS and not done:
+            action_dict = _generate_action_dict(openai_client, observation, history)
 
-        step_result = await env.step(action)
-        reward = float(step_result.reward or 0.0)
-        done = bool(step_result.done)
+            try:
+                action = ArgusAction(**action_dict)
+                action_log = _compact_action_log(action.model_dump(exclude_none=True))
+                error = None
+            except Exception as exc:
+                action = ArgusAction(**_heuristic_action(observation))
+                action_log = _compact_action_log(action.model_dump(exclude_none=True))
+                error = str(exc)
 
-        rewards.append(reward)
-        steps_taken = 1
-        score = max(0.0, min(1.0, reward))
-        success = score >= 0.5
+            step_result = await env.step(action)
+            reward = float(step_result.reward or 0.0)
+            done = bool(step_result.done)
 
-        log_step(step=1, action=action_log, reward=reward, done=done, error=error)
+            rewards.append(reward)
+            steps_taken += 1
+            log_step(step=steps_taken, action=action_log, reward=reward, done=done, error=error)
+
+            history.append(
+                f"Stage {steps_taken}: kind={observation.stage_kind or 'unknown'} reward={reward:.2f} action={action_log} feedback={observation.feedback or 'None'}"
+            )
+
+            observation = step_result.observation
+
+        score = min(1.0, sum(rewards))
+        success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as exc:
         score = 0.0
         success = False
-        log_step(step=1, action="{}", reward=0.0, done=True, error=str(exc))
+        if steps_taken == 0:
+            log_step(step=1, action="{}", reward=0.0, done=True, error=str(exc))
+        else:
+            log_step(step=steps_taken + 1, action="{}", reward=0.0, done=True, error=str(exc))
     finally:
         try:
             await env.close()
