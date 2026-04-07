@@ -5,7 +5,7 @@ colorFrom: gray
 colorTo: red
 sdk: docker
 pinned: false
-app_port: 8000
+app_port: 7860
 tags:
   - openenv
   - machine-learning
@@ -127,7 +127,7 @@ uv run server
 or:
 
 ```bash
-uvicorn server.app:app --host 0.0.0.0 --port 8000
+uvicorn server.app:app --host 0.0.0.0 --port 7860
 ```
 
 Build the Docker image:
@@ -139,7 +139,7 @@ docker build -t argus-env:latest .
 Run the container:
 
 ```bash
-docker run --rm -p 8000:8000 argus-env:latest
+docker run --rm -p 7860:7860 argus-env:latest
 ```
 
 Validate the submission:
