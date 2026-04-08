@@ -1,7 +1,41 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from openenv.core.env_server.types import Action, Observation, State
-from pydantic import Field
+from pydantic import BaseModel, Field
+
+
+class ArgusReward(BaseModel):
+    """Structured reward summary for a single environment step."""
+
+    total: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=0.99,
+        description="Final scalar reward returned for the step.",
+    )
+    stage_weight: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Maximum reward weight available for the current stage.",
+    )
+    components: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Named reward components contributing to the step reward.",
+    )
+    matched_signals: List[str] = Field(
+        default_factory=list,
+        description="Canonical evidence signals matched by the grader.",
+    )
+    penalty: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Penalty applied for undesirable calibration or behavior.",
+    )
+    note: Optional[str] = Field(
+        default=None,
+        description="Short human-readable summary of the reward outcome.",
+    )
 
 
 class ArgusAction(Action):

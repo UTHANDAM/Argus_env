@@ -10,9 +10,9 @@ from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import EnvironmentMetadata
 
 try:
-    from ..models import ArgusAction, ArgusObservation, ArgusState
+    from ..models import ArgusAction, ArgusObservation, ArgusReward, ArgusState
 except ImportError:  # pragma: no cover - direct source-tree execution
-    from models import ArgusAction, ArgusObservation, ArgusState
+    from models import ArgusAction, ArgusObservation, ArgusReward, ArgusState
 
 
 def _normalize_text(value: Optional[str]) -> str:
@@ -467,6 +467,7 @@ class ArgusEnvironment(Environment):
         reward: float,
         done: bool,
         feedback: str,
+        reward_detail: Optional[ArgusReward] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> ArgusObservation:
         current_stage = self._stage_for_index(case, stage_index)
@@ -486,6 +487,8 @@ class ArgusEnvironment(Environment):
         }
         if metadata:
             observation_metadata.update(metadata)
+        if reward_detail is not None:
+            observation_metadata["reward_detail"] = reward_detail.model_dump()
 
         return ArgusObservation(
             task_name=case.task_name,
@@ -784,6 +787,14 @@ class ArgusEnvironment(Environment):
         self._state.step_count += 1
         reward, breakdown = self._grade_stage(self._current_case, current_stage, action)
         reward = max(0.0, min(float(current_stage.weight), float(reward)))
+        reward_detail = ArgusReward(
+            total=reward,
+            stage_weight=current_stage.weight,
+            components={"step_reward": reward},
+            matched_signals=list(breakdown.get("evidence_matches", [])),
+            penalty=float(breakdown.get("penalty", 0.0) or 0.0),
+            note=str(breakdown.get("match") or breakdown.get("risk_match") or "partial"),
+        )
 
         self._state.last_reward = reward
         self._state.episode_reward = min(SCORE_CAP, self._state.episode_reward + reward)
@@ -804,6 +815,7 @@ class ArgusEnvironment(Environment):
             reward=reward,
             done=done,
             feedback=self._state.last_feedback,
+            reward_detail=reward_detail,
             metadata={
                 "phase": "step",
                 "grade_breakdown": breakdown,

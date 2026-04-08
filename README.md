@@ -25,6 +25,17 @@ This is a good fit for OpenEnv because it is:
 - Structured. The task is expressed through typed action, observation, and state models.
 - Graded. The environment returns partial credit instead of a binary pass/fail.
 
+## Reward
+
+ARGUS also defines a structured `ArgusReward` model for each step. The OpenEnv response still returns a scalar reward, but the structured model is included in `observation.metadata` for debugging and reproducibility.
+
+- `total`: final scalar reward for the step
+- `stage_weight`: reward weight available for the current stage
+- `components`: named reward components contributing to the score
+- `matched_signals`: canonical evidence signals matched by the grader
+- `penalty`: penalty applied for undesirable calibration or false positives
+- `note`: short human-readable summary of the reward outcome
+
 ## Environment Interface
 
 ARGUS follows the standard OpenEnv pattern, but each episode is multi-step:
@@ -200,7 +211,7 @@ The table below is the reproducible local baseline produced by `python -u infere
 
 ## Project Layout
 
-- `models.py` contains the typed action, observation, and state models.
+- `models.py` contains the typed action, observation, reward, and state models.
 - `client.py` contains the typed OpenEnv client.
 - `server/argus_env_environment.py` contains the grading and task logic.
 - `server/app.py` creates the FastAPI app.
