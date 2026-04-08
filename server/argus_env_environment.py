@@ -68,6 +68,8 @@ class TaskCase:
 
 _TASK_ORDER = ("easy", "medium", "hard")
 
+SCORE_CAP = 0.99
+
 _TASK_ALIASES: Dict[str, Tuple[str, ...]] = {
     "easy": ("easy", "missing_baseline", "missing-baseline", "task1", "baseline"),
     "medium": ("medium", "cherry_picked_seed", "cherry-picked-seed", "task2", "seed"),
@@ -784,7 +786,7 @@ class ArgusEnvironment(Environment):
         reward = max(0.0, min(float(current_stage.weight), float(reward)))
 
         self._state.last_reward = reward
-        self._state.episode_reward = min(1.0, self._state.episode_reward + reward)
+        self._state.episode_reward = min(SCORE_CAP, self._state.episode_reward + reward)
         self._state.last_feedback = self._feedback_text(self._current_case, current_stage, breakdown)
 
         next_stage_index = stage_index + 1

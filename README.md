@@ -193,10 +193,10 @@ The table below is the reproducible local baseline produced by `python -u infere
 
 | Task | Score |
 | --- | --- |
-| Easy | 1.000 |
+| Easy | 0.990 |
 | Medium | 0.895 |
 | Hard | 0.714 |
-| Mean | 0.870 |
+| Mean | 0.866 |
 
 ## Project Layout
 

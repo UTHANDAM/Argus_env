@@ -23,6 +23,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN")
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 BENCHMARK = os.getenv("ARGUS_BENCHMARK", "argus_env")
+SCORE_CAP = 0.99
 
 TASK_RUNS: Sequence[Tuple[str, int]] = (
     ("easy", 11),
@@ -400,7 +401,8 @@ async def _run_episode(task_name: str, seed: int, openai_client: Optional[OpenAI
 
             observation = step_result.observation
 
-        score = min(1.0, sum(rewards))
+        score = float(observation.episode_reward or 0.0)
+        score = min(SCORE_CAP, score)
         success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as exc:
