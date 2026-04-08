@@ -176,8 +176,8 @@ Environment variables used by the script:
 
 - `API_BASE_URL`
 - `MODEL_NAME`
-- `HF_TOKEN`
-- `LOCAL_IMAGE_NAME` when using `from_docker_image()`
+- `HF_TOKEN` or `OPENAI_API_KEY`
+- `LOCAL_IMAGE_NAME` or `IMAGE_NAME` when using `from_docker_image()`
 
 Example:
 
@@ -185,7 +185,7 @@ Example:
 python inference.py
 ```
 
-If `HF_TOKEN` is present, the script uses the OpenAI client against `API_BASE_URL`. If the API is unavailable, it falls back to a deterministic local heuristic so the baseline still reproduces. When `LOCAL_IMAGE_NAME` is set, the script connects through `ArgusEnv.from_docker_image()`; otherwise it uses the local service on port 7860.
+If `HF_TOKEN` or `OPENAI_API_KEY` is present, the script uses the OpenAI client against `API_BASE_URL`. If the API is unavailable, it falls back to a deterministic local heuristic so the baseline still reproduces. When `LOCAL_IMAGE_NAME` or `IMAGE_NAME` is set, the script connects through `ArgusEnv.from_docker_image()`; otherwise it uses the local service on port 7860.
 
 ## Baseline Scores
 
