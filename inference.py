@@ -153,6 +153,11 @@ def _easy_guess(context: str, stage_kind: str) -> Dict[str, Any]:
         if match:
             return {"missing_baseline": match.group(1).strip(".,;:")}
 
+    if "masked-image-modeling baseline family" in lower_context:
+        return {"missing_baseline": "BEiT-B/16" if stage_kind == "exact_missing_baseline" else "BEiT"}
+    if "multilingual transformer family" in lower_context or "cross-lingual transformer family" in lower_context:
+        return {"missing_baseline": "XLM-R-large" if stage_kind == "exact_missing_baseline" else "XLM-R"}
+
     if "beit" in lower_context:
         return {"missing_baseline": "BEiT-B/16" if stage_kind == "exact_missing_baseline" else "BEiT"}
     if "xlm-r" in lower_context:
@@ -229,8 +234,11 @@ def _hard_guess(context: str, stage_kind: str) -> Dict[str, Any]:
     risk = 0.5
     evidence: List[str] = []
 
-    cutoff_match = re.search(r"training cutoff:\s*(\d{4}-\d{2}-\d{2})", lower_context)
-    benchmark_match = re.search(r"released(?: on)?\s*(\d{4}-\d{2}-\d{2})", lower_context)
+    cutoff_match = re.search(
+        r"(?:training cutoff|training ended|training end(?:ed)?|end of training)[:\s-]*(\d{4}-\d{2}-\d{2})",
+        lower_context,
+    )
+    benchmark_match = re.search(r"(?:released|published|landed)\s*(?:on\s*)?(\d{4}-\d{2}-\d{2})", lower_context)
     if cutoff_match and benchmark_match:
         from datetime import date
 
@@ -249,10 +257,27 @@ def _hard_guess(context: str, stage_kind: str) -> Dict[str, Any]:
         "public educational material",
         "public instructional dump",
         "benchmark question mirror",
+        "worked solutions",
+        "discussion-board archive",
+        "public discussion threads",
+        "mirrored discussion board",
+        "benchmark discussion board",
+        "forum discussions",
     )
     if any(signal in lower_context for signal in contaminated_signals):
         risk = max(risk, 0.9)
         evidence.append("benchmark_in_corpus")
+
+    if (
+        "not separated at crawl time" in lower_context
+        or "not explicitly removed" in lower_context
+        or "left it in while waiting for a policy decision" in lower_context
+        or "benchmark-adjacent items" in lower_context
+        or "did not split" in lower_context
+        or "did not separate" in lower_context
+    ):
+        evidence.append("no_exclusion_filter")
+        risk = max(risk, 0.9)
 
     clean_signals = (
         "deduplicated",
@@ -267,10 +292,6 @@ def _hard_guess(context: str, stage_kind: str) -> Dict[str, Any]:
         if risk < 0.5:
             risk = 0.08
         evidence.extend(["deduplication", "held_out_filtering", "no_benchmark_scrape"])
-
-    if "not separated at crawl time" in lower_context or "not explicitly removed" in lower_context:
-        evidence.append("no_exclusion_filter")
-        risk = max(risk, 0.9)
 
     evidence = list(dict.fromkeys(evidence))
     if stage_kind == "risk_probe":

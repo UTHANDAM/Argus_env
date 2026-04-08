@@ -85,7 +85,7 @@ Only the fields relevant to the active task are used by the grader.
 - `reward`
 - `metadata`
 
-The observation context is synthetic, but it is written to look like a real ML paper excerpt, ablation table, or evaluation note.
+The observation context is constructed from realistic case studies, but it is written to look like a real ML paper excerpt, ablation table, or evaluation note.
 
 ## State
 

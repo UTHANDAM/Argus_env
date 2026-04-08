@@ -83,10 +83,19 @@ _EVIDENCE_ALIASES: Dict[str, Tuple[str, ...]] = {
         "published before training ended",
         "benchmark predated the training cutoff",
         "cutoff collision",
+        "released before the training cutoff",
+        "training ended after release",
+        "benchmark before the end of training",
+        "publication timeline shows the benchmark before training ended",
     ),
     "benchmark_in_corpus": (
         "answer-key mirror",
         "solution-thread archive",
+        "worked solutions",
+        "discussion-board archive",
+        "public discussion threads",
+        "benchmark discussion board",
+        "mirrored discussion board",
         "public instructional dump",
         "benchmark question mirror",
         "reference solutions in the corpus",
@@ -97,6 +106,11 @@ _EVIDENCE_ALIASES: Dict[str, Tuple[str, ...]] = {
         "not separated at dedupe",
         "not explicitly removed",
         "no exclusion filter",
+        "did not separate",
+        "did not split",
+        "cleanup pass left",
+        "benchmark-adjacent items",
+        "waiting for a policy decision",
     ),
     "deduplication": (
         "deduplicated",
@@ -149,7 +163,7 @@ _EASY_CASES: Tuple[TaskCase, ...] = (
                 context=(
                     "Table 2: Fine-tuning results on ImageNet-1k.\n"
                     "Compared methods: Ours, ViT-B/16, DeiT-S, Swin-T, ConvNeXt-T.\n"
-                    "Reviewer note: the omitted line belongs to the BEiT family used in earlier masked-image-modeling experiments, "
+                    "Reviewer note: the omitted line belongs to the masked-image-modeling baseline family that preceded the final comparison table, "
                     "but the appendix has not yet named the exact variant."
                 ),
                 weight=0.35,
@@ -317,9 +331,9 @@ _HARD_CASES: Tuple[TaskCase, ...] = (
                 instruction="Estimate the provisional contamination risk from the source inventory and timing clues.",
                 context=(
                     "Model: ARGUS-7B (released 2024-03-01)\n"
-                    "Training cutoff: 2024-03-15\n"
-                    "Sources: CommonCrawl, GitHub discussions, course transcripts, and a mirrored archive of benchmark solution threads.\n"
-                    "Reviewer note: public instructional material is present in the crawl, but the paper has not yet decided whether that material counts as contamination."
+                    "Training ended: 2024-03-15\n"
+                    "Sources: CommonCrawl, forum discussions, lecture transcripts, and a preserved archive of worked solutions from a public benchmark discussion board.\n"
+                    "Reviewer note: the first crawl pass did not flag the forum material as benchmark-specific, but the data team left it in while waiting for a policy decision."
                 ),
                 weight=0.25,
             ),
@@ -328,8 +342,8 @@ _HARD_CASES: Tuple[TaskCase, ...] = (
                 kind="evidence_probe",
                 instruction="Refine the contamination estimate and list the evidence signals that support it.",
                 context=(
-                    "Benchmark dossier: MMLU-Pro was released on 2024-02-10. The source archive includes answer-key mirrors and a public educational dump that were not separated at crawl time.\n"
-                    "The audit record suggests that benchmark-specific material entered the corpus through a mirrored discussion board rather than through a direct benchmark scrape."
+                    "Benchmark dossier: MMLU-Pro landed on 2024-02-10. Training ended: 2024-03-15. The archive includes worked solutions recovered from public discussion threads and an educational dump that survived the cleanup pass.\n"
+                    "The audit record suggests that benchmark material entered the corpus through a mirrored discussion board rather than through a direct scrape."
                 ),
                 weight=0.35,
             ),
@@ -338,7 +352,7 @@ _HARD_CASES: Tuple[TaskCase, ...] = (
                 kind="final_calibration",
                 instruction="Provide the final calibrated contamination risk and the strongest evidence signals.",
                 context=(
-                    "Curator note: benchmark-specific material was not explicitly filtered during deduplication; the publication timeline shows the benchmark predates the training end date.\n"
+                    "Curator note: the cleanup pass removed duplicates but left benchmark-adjacent items in place; the publication timeline still places the benchmark before the end of training.\n"
                     "The review board wants a final calibrated score rather than a binary label."
                 ),
                 weight=0.40,
