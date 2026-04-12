@@ -18,7 +18,7 @@ def _run_episode(task: str, seed: int, actions: list[ArgusAction]):
 
 
 class ArgusEnvironmentTests(unittest.TestCase):
-    def test_oracle_episodes_reach_full_score(self) -> None:
+    def test_oracle_episodes_reach_near_full_score(self) -> None:
         oracle_cases = [
             (
                 "easy",
@@ -58,7 +58,8 @@ class ArgusEnvironmentTests(unittest.TestCase):
             with self.subTest(task=task, seed=seed):
                 env, observation = _run_episode(task, seed, actions)
                 self.assertTrue(observation.done)
-                self.assertAlmostEqual(observation.episode_reward, 1.0, places=6)
+                self.assertAlmostEqual(observation.episode_reward, 0.99, places=6)
+                self.assertLess(observation.episode_reward, 1.0)
                 self.assertGreater(env.state.last_reward, 0.0)
 
     def test_wrong_trajectories_score_poorly(self) -> None:
@@ -100,6 +101,22 @@ class ArgusEnvironmentTests(unittest.TestCase):
                 self.assertTrue(observation.done)
                 self.assertLessEqual(observation.episode_reward, max_score)
 
+    def test_hard_partial_trajectory_gets_meaningful_credit(self) -> None:
+        env = ArgusEnvironment()
+        observation = env.reset(task="hard", seed=33)
+
+        self.assertEqual(env.state.case_id, "gsm8k-contaminated")
+
+        for action in [
+            ArgusAction(contamination_risk=0.3),
+            ArgusAction(contamination_risk=0.35, evidence=["solution_walkthroughs|notebook_mirrors"]),
+            ArgusAction(contamination_risk=0.35, evidence=["solution_walkthroughs|notebook_mirrors"]),
+        ]:
+            observation = env.step(action)
+
+        self.assertTrue(observation.done)
+        self.assertGreater(observation.episode_reward, 0.25)
+
     def test_clean_case_false_positive_is_penalized(self) -> None:
         _, correct = _run_episode(
             "hard",
@@ -132,7 +149,8 @@ class ArgusEnvironmentTests(unittest.TestCase):
             ],
         )
 
-        self.assertAlmostEqual(correct.episode_reward, 1.0, places=6)
+        self.assertAlmostEqual(correct.episode_reward, 0.99, places=6)
+        self.assertLess(correct.episode_reward, 1.0)
         self.assertLess(false_positive.episode_reward, 0.1)
         self.assertAlmostEqual(env.state.last_reward, 0.0, places=6)
 

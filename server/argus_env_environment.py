@@ -92,8 +92,11 @@ _EVIDENCE_ALIASES: Dict[str, Tuple[str, ...]] = {
         "evaluation set existed before training cutoff",
         "timeline overlap",
         "timing overlap",
+        "training and test overlap",
         "published before the cutoff",
         "benchmark earlier than training stop",
+        "release date overlap",
+        "model released before dataset release",
     ),
     "benchmark_in_corpus": (
         "worked solution archive",
@@ -104,6 +107,13 @@ _EVIDENCE_ALIASES: Dict[str, Tuple[str, ...]] = {
         "solution walkthroughs",
         "public answer threads",
         "benchmark-adjacent mirror",
+        "notebook mirrors",
+        "mirrored notebooks",
+        "solution notebooks",
+        "worked solutions",
+        "answer walkthroughs",
+        "community copies",
+        "forum copies",
     ),
     "no_exclusion_filter": (
         "filter rule missed mirrored sources",
@@ -114,6 +124,11 @@ _EVIDENCE_ALIASES: Dict[str, Tuple[str, ...]] = {
         "removal policy was incomplete",
         "left in during review hold",
         "corpus rule did not exclude adjacent sources",
+        "missing exclusion rule",
+        "no mirror exclusion",
+        "benchmark filter absent",
+        "did not exclude mirrors",
+        "community copies not excluded",
     ),
     "deduplication": (
         "deduplicated",
@@ -121,6 +136,9 @@ _EVIDENCE_ALIASES: Dict[str, Tuple[str, ...]] = {
         "exact and fuzzy filtering",
         "near-duplicate removal",
         "similarity filter",
+        "duplicate filtering",
+        "dedupe",
+        "fuzzy deduplication",
     ),
     "held_out_filtering": (
         "held-out scrub",
@@ -128,6 +146,9 @@ _EVIDENCE_ALIASES: Dict[str, Tuple[str, ...]] = {
         "benchmark items filtered",
         "evaluation items pruned",
         "red-team exclusion list",
+        "held out scrub",
+        "held-out list",
+        "heldout filtering",
     ),
     "no_benchmark_scrape": (
         "no benchmark-specific crawl",
@@ -135,6 +156,9 @@ _EVIDENCE_ALIASES: Dict[str, Tuple[str, ...]] = {
         "no direct benchmark scrape",
         "crawl excluded benchmark domains",
         "benchmark site was never collected",
+        "no benchmark crawl",
+        "benchmark never crawled",
+        "direct benchmark scrape",
     ),
     "twenty_run_audit": (
         "full rerun ledger",
@@ -187,7 +211,7 @@ _EASY_CASES: Tuple[TaskCase, ...] = (
                     "Appendix reconstruction note: the omitted row used the base-width checkpoint from that family with 16x16 patches. "
                     "Internal shorthand described it as the family name plus the base/16 variant."
                 ),
-                weight=0.65,
+                weight=0.64,
             ),
         ),
         answer_schema='{"missing_baseline":"string"}',
@@ -220,7 +244,7 @@ _EASY_CASES: Tuple[TaskCase, ...] = (
                 context=(
                     "Review meeting notes: the hidden row used the large-capacity checkpoint from that multilingual family, not the base model already shown in the headline table."
                 ),
-                weight=0.65,
+                weight=0.64,
             ),
         ),
         answer_schema='{"missing_baseline":"string"}',
@@ -253,7 +277,7 @@ _EASY_CASES: Tuple[TaskCase, ...] = (
                 context=(
                     "Notebook excerpt: the omitted row was the 24-layer checkpoint from that speech family rather than its base counterpart."
                 ),
-                weight=0.65,
+                weight=0.64,
             ),
         ),
         answer_schema='{"missing_baseline":"string"}',
@@ -286,7 +310,7 @@ _EASY_CASES: Tuple[TaskCase, ...] = (
                 context=(
                     "Artifact log: the hidden row used the larger 14-patch image tower from that same contrastive family, rather than the B/32 configuration shown in the table."
                 ),
-                weight=0.65,
+                weight=0.64,
             ),
         ),
         answer_schema='{"missing_baseline":"string"}',
@@ -336,7 +360,7 @@ _MEDIUM_CASES: Tuple[TaskCase, ...] = (
                     "Post-mortem note: after replaying all archived reruns, the spread re-expanded and the apparent stability disappeared. "
                     "The table had preserved only a leaderboard slice for the rebuttal draft."
                 ),
-                weight=0.35,
+                weight=0.34,
             ),
         ),
         answer_schema='{"cherry_picked_variant":"string","estimated_std_range":[low,high]}',
@@ -384,7 +408,7 @@ _MEDIUM_CASES: Tuple[TaskCase, ...] = (
                     "Reproduction note: once discarded reruns are restored, variance snaps back into the same band as the rest of the ablation sheet. "
                     "The rebuttal draft had kept only the highest-performing snapshots."
                 ),
-                weight=0.35,
+                weight=0.34,
             ),
         ),
         answer_schema='{"cherry_picked_variant":"string","estimated_std_range":[low,high]}',
@@ -431,7 +455,7 @@ _MEDIUM_CASES: Tuple[TaskCase, ...] = (
                     "Stability review: the published table came from a leaderboard slice, not the complete audit sweep. "
                     "Once archived jobs were restored, the spread re-expanded and the original narrative no longer held."
                 ),
-                weight=0.35,
+                weight=0.34,
             ),
         ),
         answer_schema='{"cherry_picked_variant":"string","estimated_std_range":[low,high]}',
@@ -479,7 +503,7 @@ _MEDIUM_CASES: Tuple[TaskCase, ...] = (
                     "Audit summary: the complete rerun ledger contradicts the paper's tiny error bars. "
                     "The stability claim was driven by a leaderboard slice and vanished when discarded runs were put back."
                 ),
-                weight=0.35,
+                weight=0.34,
             ),
         ),
         answer_schema='{"cherry_picked_variant":"string","estimated_std_range":[low,high]}',
@@ -527,7 +551,7 @@ _HARD_CASES: Tuple[TaskCase, ...] = (
                     "Governance note: duplicate removal ran, but benchmark-adjacent mirrors and worked solution threads were still present after the policy hold. "
                     "The review board wants a calibrated score, not a binary accusation."
                 ),
-                weight=0.40,
+                weight=0.39,
             ),
         ),
         answer_schema='{"contamination_risk":0.0,"evidence":["signal"]}',
@@ -570,7 +594,7 @@ _HARD_CASES: Tuple[TaskCase, ...] = (
                 context=(
                     "Red-team summary: worked solutions remained in derivative sources, and the timing makes accidental exposure plausible even without a direct benchmark crawl."
                 ),
-                weight=0.40,
+                weight=0.39,
             ),
         ),
         answer_schema='{"contamination_risk":0.0,"evidence":["signal"]}',
@@ -613,7 +637,7 @@ _HARD_CASES: Tuple[TaskCase, ...] = (
                 context=(
                     "Final audit note: benchmark domains were never collected, exclusion lists removed held-out items, and duplicate pruning found no benchmark-question hits."
                 ),
-                weight=0.40,
+                weight=0.39,
             ),
         ),
         answer_schema='{"contamination_risk":0.0,"evidence":["signal"]}',
@@ -656,7 +680,7 @@ _HARD_CASES: Tuple[TaskCase, ...] = (
                 context=(
                     "Governance closeout: held-out scrub completed successfully, no benchmark-specific crawl was used, and similarity filtering reported zero benchmark-linked collisions."
                 ),
-                weight=0.40,
+                weight=0.39,
             ),
         ),
         answer_schema='{"contamination_risk":0.0,"evidence":["signal"]}',
@@ -919,8 +943,15 @@ class ArgusEnvironment(Environment):
         if not truth_evidence:
             return 0.0, {"match": "missing", "unsupported_items": unsupported_items, "penalty": 0.0}
 
-        raw_score = max_weight * (len(evidence_matches) / len(truth_evidence))
-        penalty = min(max_weight * 0.35, unsupported_items * UNSUPPORTED_EVIDENCE_PENALTY)
+        match_fraction = len(evidence_matches) / len(truth_evidence)
+        if evidence_matches:
+            # Reward partial reasoning more generously than a pure fraction while
+            # still requiring at least one canonical or aliased signal.
+            raw_score = max_weight * (0.15 + 0.85 * match_fraction)
+        else:
+            raw_score = 0.0
+
+        penalty = min(max_weight * 0.20, unsupported_items * 0.02)
         score = max(0.0, raw_score - penalty)
         return score, {
             "match": "partial" if evidence_matches else "wrong",
@@ -937,13 +968,15 @@ class ArgusEnvironment(Environment):
         if distance <= 0.08:
             return max_weight, {"match": "exact"}
         if distance <= 0.15:
-            return max_weight * 0.85, {"match": "close"}
+            return max_weight * 0.92, {"match": "close"}
         if distance <= 0.25:
-            return max_weight * 0.6, {"match": "moderate"}
+            return max_weight * 0.75, {"match": "moderate"}
         if distance <= 0.35:
-            return max_weight * 0.35, {"match": "coarse"}
+            return max_weight * 0.55, {"match": "coarse"}
         if distance <= 0.5:
-            return max_weight * 0.1, {"match": "weak"}
+            return max_weight * 0.30, {"match": "weak"}
+        if distance <= 0.65:
+            return max_weight * 0.15, {"match": "fuzzy"}
         return 0.0, {"match": "wrong"}
 
     def _feedback_text(self, case: TaskCase, stage: StageSpec, breakdown: Dict[str, Any]) -> str:

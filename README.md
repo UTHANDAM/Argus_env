@@ -89,13 +89,13 @@ Cases include both contaminated and clean setups. Clean cases penalize overconfi
 
 The environment is explicitly shaped for learning instead of sparse pass/fail grading.
 
-- **Easy task**: `0.35 + 0.65`
-- **Medium task**: `0.30 + 0.35 + 0.35`
-- **Hard task**: `0.25 + 0.35 + 0.40`
+- **Easy task**: `0.35 + 0.64`
+- **Medium task**: `0.30 + 0.35 + 0.34`
+- **Hard task**: `0.25 + 0.35 + 0.39`
 
 Additional design choices:
 
-- perfect episodes now reach **exactly `1.00`**
+- perfect episodes now stay strictly below `1.00` and top out at `0.99`
 - unsupported evidence can reduce score
 - impossible variance ranges are penalized
 - clean-case contamination overcalls are penalized
@@ -282,10 +282,10 @@ Record these numbers from a real submission-mode run before final submission.
 
 | Task | Score |
 | --- | --- |
-| Easy | 1.00 |
-| Medium | 0.66 |
-| Hard | 0.05 |
-| Mean | 0.57 |
+| Easy | 0.99 |
+| Medium | 0.78 |
+| Hard | 0.23 |
+| Mean | 0.67 |
 
 ## Project Layout
 
