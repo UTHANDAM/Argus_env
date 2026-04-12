@@ -282,10 +282,11 @@ Record these numbers from a real submission-mode run before final submission.
 
 | Task | Score |
 | --- | --- |
-| Easy | 0.99 |
-| Medium | 0.78 |
-| Hard | 0.23 |
-| Mean | 0.67 |
+| Easy | pending |
+| Medium | pending |
+| Hard | pending |
+
+Baseline scores require HF router access (router.huggingface.co/v1). The inference script is fully implemented and validated locally. Scores will be updated once router credentials are available.
 
 ## Project Layout
 
