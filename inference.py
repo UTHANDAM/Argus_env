@@ -201,16 +201,17 @@ async def _open_env_client() -> ArgusEnv:
 
 
 async def _run_episode(task_name: str, seed: int, openai_client: Optional[OpenAI]) -> float:
-    env = await _open_env_client()
     rewards: List[float] = []
     steps_taken = 0
     score = 0.0
     success = False
     history: List[str] = []
+    env: Optional[ArgusEnv] = None
 
     log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
     try:
+        env = await _open_env_client()
         result = await env.reset(task=task_name, seed=seed)
         observation = result.observation
         done = bool(result.done)
@@ -252,7 +253,8 @@ async def _run_episode(task_name: str, seed: int, openai_client: Optional[OpenAI
             log_step(step=steps_taken + 1, action="{}", reward=0.0, done=True, error=str(exc))
     finally:
         try:
-            await env.close()
+            if env is not None:
+                await env.close()
         except Exception:
             pass
         log_end(success=success, steps=steps_taken, rewards=rewards)
