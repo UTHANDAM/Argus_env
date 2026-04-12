@@ -282,10 +282,10 @@ Record these numbers from a real submission-mode run before final submission.
 
 | Task | Score |
 | --- | --- |
-| Easy | pending live run |
-| Medium | pending live run |
-| Hard | pending live run |
-| Mean | pending live run |
+| Easy | 1.00 |
+| Medium | 0.66 |
+| Hard | 0.05 |
+| Mean | 0.57 |
 
 ## Project Layout
 
