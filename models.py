@@ -10,7 +10,7 @@ class ArgusReward(BaseModel):
     total: float = Field(
         default=0.0,
         ge=0.0,
-        le=0.99,
+        le=1.0,
         description="Final scalar reward returned for the step.",
     )
     stage_weight: float = Field(

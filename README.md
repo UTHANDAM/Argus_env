@@ -14,55 +14,106 @@ tags:
 
 # ARGUS
 
-ARGUS is an OpenEnv environment for training and evaluating agents on ML research integrity checks. The task is intentionally non-toy: the agent reads paper-like artifacts and must detect the kinds of issues that regularly appear in ML writing and review workflows, including missing baselines, cherry-picked ablation results, and benchmark contamination.
+**ARGUS** is an OpenEnv environment for training and evaluating agents on a real research workflow: auditing ML paper evaluation claims for integrity failures.
 
-ARGUS now runs as a staged investigation instead of a one-shot classifier. Each episode unfolds across multiple clue reveals, so the agent must use the full `step()` / `reset()` / `state()` loop to refine the answer as new evidence appears.
+The target user is not a generic enterprise agent. It is a research-facing agent that helps reviewers, lab engineers, and post-training teams detect three recurring failures in machine learning evaluation:
 
-This is a good fit for OpenEnv because it is:
+- omitted baselines that make a new method look stronger than it is
+- cherry-picked ablations that compress variance and overstate stability
+- benchmark contamination risks caused by training-data overlap or filtering failures
 
-- Realistic. Researchers, reviewers, and lab engineers already do this work.
-- Deterministic. Every episode has a clear ground truth and reproducible scoring.
-- Structured. The task is expressed through typed action, observation, and state models.
-- Graded. The environment returns partial credit instead of a binary pass/fail.
+This is a real task. People reviewing papers and model releases already do this work manually. ARGUS turns that workflow into a reproducible RL environment with deterministic graders and shaped rewards.
 
-## Reward
+## Why This Environment Exists
 
-ARGUS also defines a structured `ArgusReward` model for each step. The OpenEnv response still returns a scalar reward, but the structured model is included in `observation.metadata` for debugging and reproducibility.
+A strong OpenEnv task should look like something a frontier lab would actually train against. ARGUS is designed around that standard.
 
-- `total`: final scalar reward for the step
-- `stage_weight`: reward weight available for the current stage
-- `components`: named reward components contributing to the score
-- `matched_signals`: canonical evidence signals matched by the grader
-- `penalty`: penalty applied for undesirable calibration or false positives
-- `note`: short human-readable summary of the reward outcome
+- **Real-world utility**: evaluation integrity failures are common, expensive, and directly relevant to model release quality.
+- **Partial-credit rewards**: the agent is rewarded for intermediate reasoning, not just final binary correctness.
+- **Human-review strength**: the cases are staged and inference-driven, so the environment is not a thin wrapper around answer extraction.
+- **Determinism**: every case has a fixed ground truth and reproducible scoring.
 
-## Environment Interface
+## What The Agent Does
 
-ARGUS follows the standard OpenEnv pattern, but each episode is multi-step:
+Every episode is a staged investigation. The agent sees one clue at a time, responds with a typed action, receives reward and feedback, and then gets the next clue.
 
-- `reset(seed=..., task=...)` starts a new episode and returns the first clue.
-- `step(action)` grades the current stage, returns the next clue, and updates `reward` and `done`.
-- `state()` returns the current episode and stage state.
+- `reset(task=..., seed=...)` starts a deterministic case
+- `step(action)` grades the current stage and advances the episode
+- `state()` exposes the current investigation state
 
-The environment supports explicit task selection through `reset(task=...)`.
+The public interface stays stable:
 
-- `task="easy"` selects missing baseline detection over 2 stages.
-- `task="medium"` selects cherry-picked seed detection over 3 stages.
-- `task="hard"` selects benchmark contamination assessment over 3 stages.
+- `ArgusAction`
+- `ArgusObservation`
+- `ArgusState`
 
-If `task` is omitted, the environment cycles through the three tasks in order.
+## Task Families
+
+ARGUS contains **12 total cases**: 4 easy, 4 medium, and 4 hard.
+
+### 1. Missing Baseline Detection
+
+The agent receives a comparison table and must infer which important baseline was omitted.
+
+- Stage 1: infer the baseline family from indirect lineage clues
+- Stage 2: infer the exact missing citation from architecture-level details
+
+Domains covered:
+
+- vision
+- multilingual NLP
+- speech
+- multimodal retrieval
+
+### 2. Cherry-Picked Seed Detection
+
+The agent receives an ablation table where one variant reports implausibly low variance.
+
+- Stage 1: identify the suspicious variant
+- Stage 2: estimate the plausible true standard-deviation band
+- Stage 3: explain the evidence for selection bias
+
+The grader rewards partial progress and penalizes impossible variance bands or unsupported evidence.
+
+### 3. Benchmark Contamination Assessment
+
+The agent receives a training-data audit trail and must calibrate contamination risk.
+
+- Stage 1: give a provisional risk estimate from release timing and source inventory
+- Stage 2: reconcile risk with newly revealed audit evidence
+- Stage 3: produce a final calibrated score with supporting signals
+
+Cases include both contaminated and clean setups. Clean cases penalize overconfident false positives.
+
+## Reward Design
+
+The environment is explicitly shaped for learning instead of sparse pass/fail grading.
+
+- **Easy task**: `0.35 + 0.65`
+- **Medium task**: `0.30 + 0.35 + 0.35`
+- **Hard task**: `0.25 + 0.35 + 0.40`
+
+Additional design choices:
+
+- perfect episodes now reach **exactly `1.00`**
+- unsupported evidence can reduce score
+- impossible variance ranges are penalized
+- clean-case contamination overcalls are penalized
+- contaminated-case severe undercalls are also penalized
+
+The shaped reward matters because it makes the environment useful for RL, not just static evaluation.
 
 ## Action Space
 
-`ArgusAction` is a typed Pydantic model with these fields:
+`ArgusAction` exposes the full task surface:
 
-- `missing_baseline: str | None` for the easy task.
-- `cherry_picked_variant: str | None` for the medium task.
-- `estimated_std_range: list[float] | None` for the medium task.
-- `contamination_risk: float | None` for the hard task.
-- `evidence: list[str] | None` for the hard task.
+- `missing_baseline: str | None`
+- `cherry_picked_variant: str | None`
+- `estimated_std_range: list[float] | None`
+- `contamination_risk: float | None`
+- `evidence: list[str] | None`
 
-Only the fields relevant to the active task are used by the grader.
+Only the fields relevant to the current stage are used by the grader.
 
 ## Observation Space
 
@@ -85,11 +136,11 @@ Only the fields relevant to the active task are used by the grader.
 - `reward`
 - `metadata`
 
-The observation context is constructed from realistic case studies, but it is written to look like a real ML paper excerpt, ablation table, or evaluation note.
+The `context` is written like a paper excerpt, audit memo, appendix note, or governance log rather than a synthetic quiz prompt.
 
 ## State
 
-`ArgusState` exposes episode metadata for debugging and reproducibility:
+`ArgusState` tracks:
 
 - `episode_id`
 - `step_count`
@@ -106,44 +157,61 @@ The observation context is constructed from realistic case studies, but it is wr
 - `stage_kind`
 - `last_feedback`
 
-## Tasks
+## Short Episode Snapshots
 
-### Easy: Missing Baseline Detection
+These are abbreviated examples from the local deterministic smoke path.
 
-The agent receives a comparison table from a paper and must identify the omitted baseline. The first stage exposes only the family-level clue; the second stage reveals the exact citation. This mirrors a common review problem: a paper can look stronger simply because one well-known baseline was left out.
+### Easy
 
-Scoring:
+```text
+Stage 1 context: masked-image-pretraining family is hinted, but no exact citation is shown
+Action: {"missing_baseline":"BEiT"}
+Reward: 0.35
 
-- `0.35` for the family-level clue stage.
-- `0.65` for the exact missing baseline in the final stage.
-- `0.0` for clearly wrong answers.
+Stage 2 context: base-width checkpoint with 16x16 patches is hinted
+Action: {"missing_baseline":"BEiT-B/16"}
+Reward: 0.65
+```
 
-### Medium: Cherry-Picked Seed Detection
+### Medium
 
-The agent receives an ablation table with multiple variants and their run-to-run variance. One variant was cherry-picked from a much larger set of runs. The episode unfolds across three stages: first identify the suspicious variant, then estimate the plausible true standard-deviation range, then cite the strongest evidence signals.
+```text
+Stage 1 action: {"cherry_picked_variant":"Adapter"}
+Reward: 0.30
 
-Scoring:
+Stage 2 action: {"estimated_std_range":[0.88,1.24]}
+Reward: 0.35
 
-- `0.30` for identifying the correct variant.
-- `0.35` for providing a range that overlaps the true variance band.
-- `0.35` for matching the evidence signals.
+Stage 3 action: {"evidence":["twenty_run_audit","five_best_checkpoints","selection_bias"]}
+Reward: 0.35
+```
 
-### Hard: Benchmark Contamination Assessment
+### Hard
 
-The agent receives a training-data and benchmark description with release dates, data-source hints, and possible contamination cues. The episode is staged so the agent must revise its answer as more evidence arrives. The final stage asks for a calibrated contamination risk and the evidence signals that support the estimate.
+```text
+Stage 1 action: {"contamination_risk":0.92}
+Reward: 0.25
 
-Scoring:
+Stage 2 action: {"contamination_risk":0.92,"evidence":["temporal_overlap","benchmark_in_corpus","no_exclusion_filter"]}
+Reward: 0.35
 
-- Up to `0.25` for the initial risk probe.
-- Up to `0.35` for refining the risk with evidence.
-- Up to `0.40` for the final calibrated answer, with a penalty for confident false positives on clean cases.
+Stage 3 action: {"contamination_risk":0.92,"evidence":["temporal_overlap","benchmark_in_corpus","no_exclusion_filter"]}
+Reward: 0.40
+```
 
 ## Setup
 
-Install dependencies with your preferred workflow:
+Install dependencies:
 
-- `uv sync`
-- or `pip install -e .`
+```bash
+uv sync
+```
+
+or:
+
+```bash
+pip install -e .
+```
 
 Run the environment locally:
 
@@ -157,7 +225,7 @@ or:
 uvicorn server.app:app --host 0.0.0.0 --port 7860
 ```
 
-Build the Docker image:
+Build the container:
 
 ```bash
 docker build -t argus-env:latest .
@@ -169,55 +237,96 @@ Run the container:
 docker run --rm -p 7860:7860 argus-env:latest
 ```
 
-Validate the submission:
+Validate the environment:
 
 ```bash
 openenv validate
 ```
 
+Run the test suite:
+
+```bash
+python -m unittest discover -s tests
+```
+
 ## Baseline Inference
 
-The root-level `inference.py` script runs all three tasks in order, steps through the staged clues, and prints the required OpenEnv log format:
+The root-level `inference.py` script follows the required structured logging format:
 
 - `[START] task=<task_name> env=<benchmark> model=<model_name>`
 - `[STEP] step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>`
-- `[END] success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...>`
+- `[END] success=<true|false> steps=<n> rewards=<r1,r2,...,rn>`
 
-Environment variables used by the script:
+Environment variables:
 
-- `API_BASE_URL`
-- `MODEL_NAME`
-- `HF_TOKEN`
-- `LOCAL_IMAGE_NAME` when using `from_docker_image()`
+- `API_BASE_URL` with default `https://api.openai.com/v1`
+- `MODEL_NAME` with default `Qwen/Qwen2.5-72B-Instruct`
+- `HF_TOKEN` required for submission-mode inference
+- `OPENAI_API_KEY` accepted as a compatibility fallback for older validator wording
+- `LOCAL_IMAGE_NAME` optional when using `from_docker_image()`
+- `ARGUS_DEBUG_FALLBACK=1` optional for local deterministic smoke tests only
 
-Example:
+### Submission Mode
+
+This is the path intended for hackathon evaluation. It uses the **OpenAI client** against the Hugging Face router.
 
 ```bash
 python inference.py
 ```
 
-If `HF_TOKEN` is present, the script uses the OpenAI client against `API_BASE_URL`. If the API is unavailable, it falls back to a deterministic local heuristic so the baseline still reproduces. When `LOCAL_IMAGE_NAME` is set, the script connects through `ArgusEnv.from_docker_image()`; otherwise it uses the local service on port 7860.
+If `HF_TOKEN` is missing and `ARGUS_DEBUG_FALLBACK` is not enabled, the script fails instead of silently switching to heuristics.
 
-## Baseline Scores
+### Local Debug Smoke Mode
 
-The table below is the reproducible local baseline produced by `python -u inference.py` in fallback mode. The script still uses the OpenAI client when `HF_TOKEN` and `API_BASE_URL` are available; these numbers are from the offline deterministic path so they can be reproduced without external API access.
+For local verification without router access:
+
+```bash
+$env:ARGUS_DEBUG_FALLBACK="1"
+python inference.py
+```
+
+This mode uses deterministic case-aware heuristics to exercise the environment loop and log format. It is for smoke testing only, not for reporting real model capability.
+
+## Score Reporting
+
+### HF-Router Baseline
+
+Record these numbers from a real submission-mode run before final submission:
 
 | Task | Score |
 | --- | --- |
-| Easy | 0.990 |
-| Medium | 0.895 |
-| Hard | 0.714 |
-| Mean | 0.866 |
+| Easy | To be recorded with active `HF_TOKEN` |
+| Medium | To be recorded with active `HF_TOKEN` |
+| Hard | To be recorded with active `HF_TOKEN` |
+| Mean | To be recorded with active `HF_TOKEN` |
+
+### Local Debug Smoke Scores
+
+These come from the deterministic debug path and exist only to prove the environment and logging path work end to end.
+
+| Task | Score |
+| --- | --- |
+| Easy | 1.00 |
+| Medium | 1.00 |
+| Hard | 1.00 |
+| Mean | 1.00 |
 
 ## Project Layout
 
-- `models.py` contains the typed action, observation, reward, and state models.
-- `client.py` contains the typed OpenEnv client.
-- `server/argus_env_environment.py` contains the grading and task logic.
-- `server/app.py` creates the FastAPI app.
-- `Dockerfile` builds the HF Space container.
-- `inference.py` is the baseline runner.
+- `models.py` defines typed actions, observations, rewards, and state
+- `client.py` defines the typed OpenEnv client
+- `server/argus_env_environment.py` contains the staged cases and grading logic
+- `server/app.py` exposes the FastAPI server
+- `inference.py` is the baseline runner
+- `tests/test_argus_environment.py` contains deterministic regression tests
 
-## Why ARGUS
+## Why ARGUS Is A Strong OpenEnv Submission
 
-ARGUS is deliberately aimed at a real ML workflow. Missing baselines, cherry-picked ablations, and contamination checks are not game mechanics; they are part of the daily work of people reviewing and deploying ML systems. That makes the environment useful for evaluating agent reliability, calibration, and research integrity reasoning.
+ARGUS is not a toy environment and not a thin reskin of an existing OpenEnv example. It models a workflow that frontier labs actually care about: whether evaluation evidence is complete, honestly reported, and uncontaminated.
+
+That makes it useful for:
+
+- post-training evaluation research
+- agent reliability benchmarking
+- release-readiness audits
+- calibration-sensitive RL tasks where false positives should be penalized

@@ -30,3 +30,6 @@ build-backend = "setuptools.build_meta"
 include-package-data = true
 packages = ["argus_env", "argus_env.server"]
 package-dir = { "argus_env" = ".", "argus_env.server" = "server" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
