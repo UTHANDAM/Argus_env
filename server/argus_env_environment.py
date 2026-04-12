@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 import re
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from threading import RLock
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
 from uuid import uuid4
 
 from openenv.core.env_server.interfaces import Environment
@@ -678,6 +679,9 @@ class ArgusEnvironment(Environment):
     """ARGUS - ML Evaluation Integrity Environment."""
 
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
+    _HTTP_SESSION_LOCK: ClassVar[RLock] = RLock()
+    _HTTP_SESSION_SNAPSHOTS: ClassVar[Dict[str, Dict[str, Any]]] = {}
+    _HTTP_DEFAULT_SESSION_ID: ClassVar[Optional[str]] = None
 
     def __init__(self):
         super().__init__()
@@ -686,6 +690,49 @@ class ArgusEnvironment(Environment):
         self._current_case: Optional[TaskCase] = None
         self._episode_done = False
         self._state = ArgusState(episode_id=str(uuid4()), step_count=0)
+
+    def _persist_http_session(self) -> None:
+        episode_id = self._state.episode_id
+        if not episode_id:
+            return
+
+        snapshot = {
+            "current_case": self._current_case,
+            "episode_done": self._episode_done,
+            "episode_index": self._episode_index,
+            "state_data": self._state.model_dump(),
+            "task_cursor": self._task_cursor,
+        }
+        with self.__class__._HTTP_SESSION_LOCK:
+            self.__class__._HTTP_SESSION_SNAPSHOTS[episode_id] = snapshot
+            self.__class__._HTTP_DEFAULT_SESSION_ID = episode_id
+
+    @classmethod
+    def _load_http_session(cls, episode_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        with cls._HTTP_SESSION_LOCK:
+            if episode_id and episode_id in cls._HTTP_SESSION_SNAPSHOTS:
+                return cls._HTTP_SESSION_SNAPSHOTS[episode_id]
+
+            default_id = cls._HTTP_DEFAULT_SESSION_ID
+            if default_id and default_id in cls._HTTP_SESSION_SNAPSHOTS:
+                return cls._HTTP_SESSION_SNAPSHOTS[default_id]
+
+            if len(cls._HTTP_SESSION_SNAPSHOTS) == 1:
+                return next(iter(cls._HTTP_SESSION_SNAPSHOTS.values()))
+
+        return None
+
+    def _restore_http_session(self, episode_id: Optional[str] = None) -> bool:
+        snapshot = self.__class__._load_http_session(episode_id)
+        if snapshot is None:
+            return False
+
+        self._current_case = snapshot.get("current_case")
+        self._episode_done = bool(snapshot.get("episode_done", False))
+        self._episode_index = int(snapshot.get("episode_index", 0))
+        self._task_cursor = int(snapshot.get("task_cursor", 0))
+        self._state = ArgusState(**snapshot.get("state_data", {}))
+        return True
 
     def get_metadata(self) -> EnvironmentMetadata:
         return EnvironmentMetadata(
@@ -731,6 +778,7 @@ class ArgusEnvironment(Environment):
     ) -> ArgusObservation:
         current_stage = self._stage_for_index(case, stage_index)
         observation_metadata: Dict[str, Any] = {
+            "episode_id": self._state.episode_id,
             "task_name": case.task_name,
             "case_id": case.case_id,
             "answer_schema": case.answer_schema,
@@ -1067,6 +1115,7 @@ class ArgusEnvironment(Environment):
             last_feedback="Begin with the first clue.",
         )
         self._episode_index += 1
+        self._persist_http_session()
 
         return self._build_observation(
             case,
@@ -1084,7 +1133,9 @@ class ArgusEnvironment(Environment):
 
     def step(self, action: ArgusAction, timeout_s: Optional[float] = None, **kwargs: Any) -> ArgusObservation:  # type: ignore[override]
         if self._current_case is None:
-            raise RuntimeError("ARGUS environment must be reset before step() is called.")
+            requested_episode_id = kwargs.get("episode_id") or kwargs.get("request_id")
+            if not self._restore_http_session(requested_episode_id):
+                raise RuntimeError("ARGUS environment must be reset before step() is called.")
 
         if self._episode_done:
             final_stage_index = max(0, len(self._current_case.stages) - 1)
@@ -1159,8 +1210,11 @@ class ArgusEnvironment(Environment):
 
         if done:
             observation.metadata["episode_complete"] = True
+        self._persist_http_session()
         return observation
 
     @property
     def state(self) -> ArgusState:
+        if self._current_case is None:
+            self._restore_http_session()
         return self._state
