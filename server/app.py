@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 
 from fastapi.responses import HTMLResponse, RedirectResponse
 from openenv.core.env_server.http_server import create_app
 
-try:
-    from ..models import ArgusAction, ArgusObservation
-    from .argus_env_environment import ArgusEnvironment
-except ImportError:  # pragma: no cover - direct source-tree execution
-    from models import ArgusAction, ArgusObservation
-    from server.argus_env_environment import ArgusEnvironment
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from models import ArgusAction, ArgusObservation
+from server.argus_env_environment import ArgusEnvironment
 
 
 def _create_environment() -> ArgusEnvironment:

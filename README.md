@@ -262,9 +262,7 @@ Environment variables:
 - `API_BASE_URL` with default `https://api.openai.com/v1`
 - `MODEL_NAME` with default `Qwen/Qwen2.5-72B-Instruct`
 - `HF_TOKEN` required for submission-mode inference
-- `OPENAI_API_KEY` accepted as a compatibility fallback for older validator wording
 - `LOCAL_IMAGE_NAME` optional when using `from_docker_image()`
-- `ARGUS_DEBUG_FALLBACK=1` optional for local deterministic smoke tests only
 
 ### Submission Mode
 
@@ -274,42 +272,20 @@ This is the path intended for hackathon evaluation. It uses the **OpenAI client*
 python inference.py
 ```
 
-If `HF_TOKEN` is missing and `ARGUS_DEBUG_FALLBACK` is not enabled, the script fails instead of silently switching to heuristics.
-
-### Local Debug Smoke Mode
-
-For local verification without router access:
-
-```bash
-$env:ARGUS_DEBUG_FALLBACK="1"
-python inference.py
-```
-
-This mode uses deterministic case-aware heuristics to exercise the environment loop and log format. It is for smoke testing only, not for reporting real model capability.
+If `HF_TOKEN` is missing, the script fails immediately rather than silently switching to a local heuristic.
 
 ## Score Reporting
 
 ### HF-Router Baseline
 
-Record these numbers from a real submission-mode run before final submission:
+Record these numbers from a real submission-mode run before final submission.
 
 | Task | Score |
 | --- | --- |
-| Easy | To be recorded with active `HF_TOKEN` |
-| Medium | To be recorded with active `HF_TOKEN` |
-| Hard | To be recorded with active `HF_TOKEN` |
-| Mean | To be recorded with active `HF_TOKEN` |
-
-### Local Debug Smoke Scores
-
-These come from the deterministic debug path and exist only to prove the environment and logging path work end to end.
-
-| Task | Score |
-| --- | --- |
-| Easy | 1.00 |
-| Medium | 1.00 |
-| Hard | 1.00 |
-| Mean | 1.00 |
+| Easy | pending live run |
+| Medium | pending live run |
+| Hard | pending live run |
+| Mean | pending live run |
 
 ## Project Layout
 
