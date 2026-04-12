@@ -259,7 +259,7 @@ The root-level `inference.py` script follows the required structured logging for
 
 Environment variables:
 
-- `API_BASE_URL` with default `https://api.openai.com/v1`
+- `API_BASE_URL` with default `https://router.huggingface.co/v1`
 - `MODEL_NAME` with default `Qwen/Qwen2.5-72B-Instruct`
 - `HF_TOKEN` required for submission-mode inference
 - `LOCAL_IMAGE_NAME` optional when using `from_docker_image()`
